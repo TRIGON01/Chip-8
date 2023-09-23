@@ -2,6 +2,7 @@
 #include<fstream>
 #include<chrono>
 #include<random>
+#include<memory.h>
 
 using byte=unsigned char;
 using word=unsigned short;
@@ -48,6 +49,7 @@ byte stack[64];
 
 byte memory[MAXMEM];
 
+uint16_t opcode;
 
 uint8_t fontset[FONTSET_SIZE] =
 {
@@ -79,7 +81,7 @@ void reset()
 		memory[FONTSET_START_ADDRESS + i] = fontset[i];
 	}
 
-
+   
 }
 
 
@@ -111,15 +113,56 @@ void LoadROM(char const* filename)
 	}
 }
 
-
-void execute(word PC)
+void cycle()
 {
-    word ins=PC;
-    PC+=2;
-    switch(ins)
-    {
-            
-    }
+    //Fetch
+    opcode=memory[PC];
+    opcode<<8u;
+    opcode=opcode|memory[PC+1];
+    
+    //Decode and execute
+
+
+    // Decrement the delay timer if it's been set
+	if (delay_timer > 0)
+	{
+		delay_timer--;
+	}
+
+	// Decrement the sound timer if it's been set
+	if (sound_timer > 0)
+	{
+		sound_timer--;
+	}
+
+}
+
+void OP_00E0() //Cls clear screen
+{
+	memset(frame_buffer, 0, sizeof(frame_buffer));
+}
+
+void OP_00EE()//Return from sub-routine
+{
+	SP--;
+	PC = stack[SP];
+}
+
+void OP_1NNN() //Jump to location nnn
+{
+    uint16_t val = opcode;
+    val=val&0x0fffu;
+    PC=val;
+
+}
+
+void OP_2nnn()
+{
+
+	uint16_t address =  opcode& 0x0FFFu;
+	stack[SP] = PC;
+    SP++;
+	PC= address;
 }
 };
 
