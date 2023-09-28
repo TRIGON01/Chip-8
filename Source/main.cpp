@@ -34,6 +34,7 @@ uint8_t stack[64];
 uint8_t memory[MAXMEM];
 
 uint16_t opcode;
+uint8_t keypad[16];
 
 uint8_t fontset[FONTSET_SIZE] =
 {
@@ -111,7 +112,7 @@ void cycle()
     //Fetch
     opcode=memory[PC];
     opcode<<8u;
-    opcode=opcode|memory[PC+1];
+    opcode=opcode|memory[PC+1]; // We attack two 8 bit segments to create one 16 bit segment
     
     //Decode and execute
 
@@ -386,6 +387,179 @@ void OP_Dxyn() //Display n-byte sprite starting at memory location I at (Vx, Vy)
 	}
 }
 
+void OP_Ex9E()//Skip next instruction if key with the value of Vx is pressed.
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	uint8_t key = registers[Vx];
+
+	if (keypad[key])
+	{
+		PC += 2;
+	}
+}
+
+void OP_ExA1()//Skip next instruction if key with the value of Vx is not pressed.
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	uint8_t key = registers[Vx];
+
+	if (!keypad[key])
+	{
+		PC += 2;
+	}
+}
+
+void OP_Fx07()  //Set Vx to delay timer value
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	registers[Vx] = delay_timer;
+}
+
+void OP_Fx0A()//Wait for a key press, store the value of the key in Vx.
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	if (keypad[0])
+	{
+		registers[Vx] = 0;
+	}
+	else if (keypad[1])
+	{
+		registers[Vx] = 1;
+	}
+	else if (keypad[2])
+	{
+		registers[Vx] = 2;
+	}
+	else if (keypad[3])
+	{
+		registers[Vx] = 3;
+	}
+	else if (keypad[4])
+	{
+		registers[Vx] = 4;
+	}
+	else if (keypad[5])
+	{
+		registers[Vx] = 5;
+	}
+	else if (keypad[6])
+	{
+		registers[Vx] = 6;
+	}
+	else if (keypad[7])
+	{
+		registers[Vx] = 7;
+	}
+	else if (keypad[8])
+	{
+		registers[Vx] = 8;
+	}
+	else if (keypad[9])
+	{
+		registers[Vx] = 9;
+	}
+	else if (keypad[10])
+	{
+		registers[Vx] = 10;
+	}
+	else if (keypad[11])
+	{
+		registers[Vx] = 11;
+	}
+	else if (keypad[12])
+	{
+		registers[Vx] = 12;
+	}
+	else if (keypad[13])
+	{
+		registers[Vx] = 13;
+	}
+	else if (keypad[14])
+	{
+		registers[Vx] = 14;
+	}
+	else if (keypad[15])
+	{
+		registers[Vx] = 15;
+	}
+	else
+	{
+		PC -= 2; //Repeats the same instructions as the cycle increases by +2 so this -2 will return to the same position again and again....
+	}
+}
+
+void OP_Fx15()  //Set delay timer = Vx
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	delay_timer = registers[Vx];
+}
+
+void OP_Fx18() // Set sound timer = Vx
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	sound_timer = registers[Vx];
+}
+
+void OP_Fx1E()
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	IR += registers[Vx];
+}
+
+void OP_Fx29()//Set I = location of sprite for digit Vx.
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t digit = registers[Vx];
+
+	IR = FONTSET_START_ADDRESS + (5 * digit);
+}
+
+void OP_Fx33() //for 0-255 max 3 difits
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t value = registers[Vx];
+
+	// Units-place
+	memory[IR + 2] = value % 10;
+	value /= 10;
+
+	// Tens-place
+	memory[IR + 1] = value % 10;
+	value /= 10;
+
+	// Hundreds-place
+	memory[IR] = value % 10;
+}
+
+void OP_Fx55() // Store V0-Vx in memory starting at I
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	for (uint8_t i = 0; i <= Vx; ++i)
+	{
+		memory[IR + i] = registers[i];
+	}
+}
+
+void OP_Fx65() // Load data from memory in to registers V0 to Vx
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	for (uint8_t i = 0; i <= Vx; ++i)
+	{
+		registers[i] = memory[IR + i];
+	}
+}
+
+////////////////////////////////////////////
+//Opcode decoding step
 
 };
 
