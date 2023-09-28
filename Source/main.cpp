@@ -382,12 +382,9 @@ void OP_Dxyn() //Display n-byte sprite starting at memory location I at (Vx, Vy)
 				// Effectively XOR with the sprite pixel
 				*screenPixel ^= 0xFFFFFFFF;
 			}
-
+		}
 	}
-
 }
-
-
 
 
 };
