@@ -268,7 +268,7 @@ void OP_8xy5() //Vx=Vx-Vy
 	registers[Vx] -= registers[Vy];
 }
 
-void OP_8xy6()
+void OP_8xy6() //Set Vx = Vx SHR 1.
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
@@ -278,7 +278,7 @@ void OP_8xy6()
 	registers[Vx] >>= 1;
 }
 
-void OP_8xy7()
+void OP_8xy7()//Set Vx = Vy - Vx, set VF = NOT borrow.
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
@@ -293,6 +293,41 @@ void OP_8xy7()
 	}
 
 	registers[Vx] = registers[Vy] - registers[Vx];
+}
+
+void OP_8xyE()//Set Vx = Vx SHL 1.
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	// Save MSB in VF
+	registers[0xF] = (registers[Vx] & 0x80u) >> 7u;
+
+	registers[Vx] <<= 1;
+}
+
+void OP_9xy0() //Skip next instruction if Vx!=Vy
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+
+	if (registers[Vx] != registers[Vy])
+	{
+		PC += 2;
+	}
+}
+
+void OP_Annn()//Set index register to nnn
+{
+	uint16_t address = opcode & 0x0FFFu;
+
+	IR = address;
+}
+
+void OP_Bnnn()//Jump to location V0+nnn
+{
+uint16_t offset = opcode & 0x0FFFu;
+
+PC = registers[0] + offset;
 }
 
 
