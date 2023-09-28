@@ -4,6 +4,10 @@
 #include<random>
 #include<memory.h>
 
+#include <SFML/System.hpp>
+#include <SFML/Graphics.hpp>
+#include <SFML/Window.hpp>
+
 
 
 static constexpr uint32_t MAXMEM=4096;
@@ -14,8 +18,9 @@ static constexpr int FONTSET_START_ADDRESS = 0x50;
 static constexpr int VIDEO_WIDTH = 64;
 static constexpr int VIDEO_HEIGHT = 32;
 
-struct CPU
+class CPU
 {
+public:
 //16 8 bit registers V0-VF
 uint8_t registers[16];
 
@@ -96,7 +101,7 @@ void LoadROM(char const* filename)
 		file.read(buffer, size);
 		file.close();
 
-		// Load the ROM contents into the Chip8's memory, starting at 0x200
+		// Load the ROM contents into the& memory, starting at 0x200
 		for (long i = 0; i < size; ++i)
 		{
 			memory[mem_limit_lower + i] = buffer[i];
@@ -115,6 +120,7 @@ void cycle()
     opcode=opcode|memory[PC+1]; // We attack two 8 bit segments to create one 16 bit segment
     
     //Decode and execute
+	((*this).*(table[(opcode & 0xF000u) >> 12u]))();
 
 
     // Decrement the delay timer if it's been set
@@ -142,7 +148,7 @@ void OP_00EE()//Return from sub-routine
 	PC = stack[SP];
 }
 
-void OP_1NNN() //Jump to location nnn
+void OP_1nnn() //Jump to location nnn
 {
     uint16_t val = opcode;
     val=val&0x0FFFu;
@@ -560,12 +566,309 @@ void OP_Fx65() // Load data from memory in to registers V0 to Vx
 
 ////////////////////////////////////////////
 //Opcode decoding step
+////////////////////////////////////////////
+ // Replace with the actual opcode you want to execute
+typedef void (CPU::*CPUFunc)();
+CPUFunc table[0xF + 1];
+CPUFunc table0[0xE + 1];
+CPUFunc table8[0xE + 1];
+CPUFunc tableE[0xE + 1];
+CPUFunc tableF[0x65 + 1];
+
+void Table0()
+{
+	((*this).*(table0[opcode & 0x000Fu]))();
+}
+
+void Table8()
+{
+	((*this).*(table8[opcode & 0x000Fu]))();
+}
+
+void TableE()
+{
+	((*this).*(tableE[opcode & 0x000Fu]))();
+}
+
+void TableF()
+{
+	((*this).*(tableF[opcode & 0x00FFu]))();
+}
+
+void OP_NULL()
+{}
+void execute()
+{
+// Set up function pointer table
+		table[0x0] = &CPU::Table0;
+		table[0x1] = &CPU::OP_1nnn;
+		table[0x2] = &CPU::OP_2nnn;
+		table[0x3] = &CPU::OP_3xkk;
+		table[0x4] = &CPU::OP_4xkk;
+		table[0x5] = &CPU::OP_5xy0;
+		table[0x6] = &CPU::OP_6xkk;
+		table[0x7] = &CPU::OP_7xkk;
+		table[0x8] = &CPU::Table8;
+		table[0x9] = &CPU::OP_9xy0;
+		table[0xA] = &CPU::OP_Annn;
+		table[0xB] = &CPU::OP_Bnnn;
+		table[0xC] = &CPU::OP_Cxkk;
+		table[0xD] = &CPU::OP_Dxyn;
+		table[0xE] = &CPU::TableE;
+		table[0xF] = &CPU::TableF;
+
+		for (size_t i = 0; i <= 0xE; i++)
+		{
+			table0[i] = &CPU::OP_NULL;
+			table8[i] = &CPU::OP_NULL;
+			tableE[i] = &CPU::OP_NULL;
+		}
+
+		table0[0x0] = &CPU::OP_00E0;
+		table0[0xE] = &CPU::OP_00EE;
+
+		table8[0x0] = &CPU::OP_8xy0;
+		table8[0x1] = &CPU::OP_8xy1;
+		table8[0x2] = &CPU::OP_8xy2;
+		table8[0x3] = &CPU::OP_8xy3;
+		table8[0x4] = &CPU::OP_8xy4;
+		table8[0x5] = &CPU::OP_8xy5;
+		table8[0x6] = &CPU::OP_8xy6;
+		table8[0x7] = &CPU::OP_8xy7;
+		table8[0xE] = &CPU::OP_8xyE;
+
+		tableE[0x1] = &CPU::OP_ExA1;
+		tableE[0xE] = &CPU::OP_Ex9E;
+
+		for (size_t i = 0; i <= 0x65; i++)
+		{
+			tableF[i] = &CPU::OP_NULL;
+		}
+
+		tableF[0x07] = &CPU::OP_Fx07;
+		tableF[0x0A] = &CPU::OP_Fx0A;
+		tableF[0x15] = &CPU::OP_Fx15;
+		tableF[0x18] = &CPU::OP_Fx18;
+		tableF[0x1E] = &CPU::OP_Fx1E;
+		tableF[0x29] = &CPU::OP_Fx29;
+		tableF[0x33] = &CPU::OP_Fx33;
+		tableF[0x55] = &CPU::OP_Fx55;
+		tableF[0x65] = &CPU::OP_Fx65;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+
+
+	
 
 };
 
-int main()
+class Platform
 {
-    CPU cpu;
-    
+public:
+    Platform(const char* title, int windowWidth, int windowHeight, int textureWidth, int textureHeight)
+    {
+        window.create(sf::VideoMode(windowWidth, windowHeight), title);
+        texture.create(textureWidth, textureHeight);
+        sprite.setTexture(texture);
+    }
+
+    ~Platform()
+    {
+        // No need to explicitly destroy SFML objects; they are managed automatically.
+    }
+
+    void Update(const void* buffer, int pitch)
+    {
+        texture.update(static_cast<const sf::Uint8*>(buffer),VIDEO_WIDTH,VIDEO_HEIGHT, texture.getSize().x, texture.getSize().y);
+        window.clear();
+        window.draw(sprite);
+        window.display();
+    }
+
+    bool ProcessInput(uint8_t* keys)
+    {
+        sf::Event event;
+
+        while (window.pollEvent(event))
+        {
+            switch (event.type)
+            {
+                case sf::Event::Closed:
+                    return true;
+
+                case sf::Event::KeyPressed:
+                    HandleKeyPress(event.key.code, keys);
+                    break;
+
+                case sf::Event::KeyReleased:
+                    HandleKeyRelease(event.key.code, keys);
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        return false;
+    }
+
+private:
+    sf::RenderWindow window;
+    sf::Texture texture;
+    sf::Sprite sprite;
+
+    void HandleKeyPress(sf::Keyboard::Key key, uint8_t* keys)
+    {
+        switch (key)
+        {
+            case sf::Keyboard::Escape:
+                keys[0] = 1;
+                break;
+            case sf::Keyboard::X:
+                keys[1] = 1;
+                break;
+            case sf::Keyboard::Num1:
+                keys[2] = 1;
+                break;
+            case sf::Keyboard::Num2:
+                keys[3] = 1;
+                break;
+            case sf::Keyboard::Q:
+                keys[4] = 1;
+                break;
+            case sf::Keyboard::W:
+                keys[5] = 1;
+                break;
+            case sf::Keyboard::E:
+                keys[6] = 1;
+                break;
+            case sf::Keyboard::A:
+                keys[7] = 1;
+                break;
+            case sf::Keyboard::S:
+                keys[8] = 1;
+                break;
+            case sf::Keyboard::D:
+                keys[9] = 1;
+                break;
+            case sf::Keyboard::Z:
+                keys[0xA] = 1;
+                break;
+            case sf::Keyboard::C:
+                keys[0xB] = 1;
+                break;
+            case sf::Keyboard::Num4:
+                keys[0xC] = 1;
+                break;
+            case sf::Keyboard::R:
+                keys[0xD] = 1;
+                break;
+            case sf::Keyboard::F:
+                keys[0xE] = 1;
+                break;
+            case sf::Keyboard::V:
+                keys[0xF] = 1;
+                break;
+        }
+    }
+
+    void HandleKeyRelease(sf::Keyboard::Key key, uint8_t* keys)
+    {
+        switch (key)
+        {
+            case sf::Keyboard::Escape:
+                keys[0] = 0;
+                break;
+            case sf::Keyboard::X:
+                keys[1] = 0;
+                break;
+            case sf::Keyboard::Num1:
+                keys[2] = 0;
+                break;
+            case sf::Keyboard::Num2:
+                keys[3] = 0;
+                break;
+            case sf::Keyboard::Q:
+                keys[4] = 0;
+                break;
+            case sf::Keyboard::W:
+                keys[5] = 0;
+                break;
+            case sf::Keyboard::E:
+                keys[6] = 0;
+                break;
+            case sf::Keyboard::A:
+                keys[7] = 0;
+                break;
+            case sf::Keyboard::S:
+                keys[8] = 0;
+                break;
+            case sf::Keyboard::D:
+                keys[9] = 0;
+                break;
+            case sf::Keyboard::Z:
+                keys[0xA] = 0;
+                break;
+            case sf::Keyboard::C:
+                keys[0xB] = 0;
+                break;
+            case sf::Keyboard::Num4:
+                keys[0xC] = 0;
+                break;
+            case sf::Keyboard::R:
+                keys[0xD] = 0;
+                break;
+            case sf::Keyboard::F:
+                keys[0xE] = 0;
+                break;
+            case sf::Keyboard::V:
+                keys[0xF] = 0;
+                break;
+        }
+    }
+};
+
+
+int main(int argc, char* argv[])
+{
+    if (argc != 4)
+    {
+        std::cerr << "Usage: " << argv[0] << " <Scale> <Delay> <ROM>\n";
+        std::exit(EXIT_FAILURE);
+    }
+
+    int videoScale = std::stoi(argv[1]);
+    int cycleDelay = std::stoi(argv[2]);
+    const char* romFilename = argv[3];
+
+    Platform platform("CHIP-8 Emulator", VIDEO_WIDTH * videoScale, VIDEO_HEIGHT * videoScale, VIDEO_WIDTH, VIDEO_HEIGHT);
+
+    CPU chip8;
+    chip8.LoadROM(romFilename);
+
+    int videoPitch = sizeof(chip8.frame_buffer[0]) * VIDEO_WIDTH;
+
+    auto lastCycleTime = std::chrono::high_resolution_clock::now();
+    bool quit = false;
+
+    while (!quit)
+    {
+        quit = platform.ProcessInput(chip8.keypad);
+
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float dt = std::chrono::duration<float, std::chrono::milliseconds::period>(currentTime - lastCycleTime).count();
+
+        if (dt > cycleDelay)
+        {
+            lastCycleTime = currentTime;
+
+            chip8.cycle();
+
+            platform.Update(chip8.frame_buffer, videoPitch);
+        }
+    }
+
     return 0;
 }
