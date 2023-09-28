@@ -112,30 +112,6 @@ void LoadROM(char const* filename)
 	}
 }
 
-void cycle()
-{
-    //Fetch
-    opcode=memory[PC];
-    opcode<<8u;
-    opcode=opcode|memory[PC+1]; // We attack two 8 bit segments to create one 16 bit segment
-    
-    //Decode and execute
-	((*this).*(table[(opcode & 0xF000u) >> 12u]))();
-
-
-    // Decrement the delay timer if it's been set
-	if (delay_timer > 0)
-	{
-		delay_timer--;
-	}
-
-	// Decrement the sound timer if it's been set
-	if (sound_timer > 0)
-	{
-		sound_timer--;
-	}
-
-}
 
 void OP_00E0() //Cls clear screen
 {
@@ -563,7 +539,35 @@ void OP_Fx65() // Load data from memory in to registers V0 to Vx
 		registers[i] = memory[IR + i];
 	}
 }
+////////////////////////////////////////////
+//Cycle
+///////////////////////////////////////////
+void cycle()
+{
+    //Fetch
+    opcode=memory[PC];
+    opcode<<8u;
+    opcode=opcode|memory[PC+1]; // We attack two 8 bit segments to create one 16 bit segment
+    
+    //Decode and execute
+	((*this).*(table[(opcode & 0xF000u) >> 12u]))();
 
+
+    // Decrement the delay timer if it's been set
+	if (delay_timer > 0)
+	{
+		delay_timer--;
+	}
+
+	// Decrement the sound timer if it's been set
+	if (sound_timer > 0)
+	{
+		sound_timer--;
+	}
+
+}
+
+////////////////////////////////////////////
 ////////////////////////////////////////////
 //Opcode decoding step
 ////////////////////////////////////////////
