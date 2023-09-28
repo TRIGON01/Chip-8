@@ -11,7 +11,8 @@ static constexpr uint32_t mem_limit_upper=0xfff;
 static constexpr uint32_t mem_limit_lower=0x200;
 static constexpr int FONTSET_SIZE = 80;
 static constexpr int FONTSET_START_ADDRESS = 0x50;
-
+static constexpr int VIDEO_WIDTH = 64;
+static constexpr int VIDEO_HEIGHT = 32;
 
 struct CPU
 {
@@ -27,7 +28,7 @@ uint16_t PC;//16 bit program counter
 uint8_t delay_timer;//8 bit delay timer
 uint8_t sound_timer; // 8 bit sound timer
 
-bool frame_buffer[64][32];
+uint32_t frame_buffer[32][64];
 uint8_t stack[64];
 
 uint8_t memory[MAXMEM];
@@ -67,6 +68,15 @@ void reset()
    
 }
 
+//Random byte implementation
+std::mt19937 rng;  // the Mersenne Twister with a popular choice of parameters
+uint32_t seed_val;           // populate somehow
+std::uniform_int_distribution<uint8_t> uint_dist;
+
+void initialize()
+{
+  rng.seed(seed_val);
+}
 
 //Loading a rom
 void LoadROM(char const* filename)
@@ -329,6 +339,55 @@ uint16_t offset = opcode & 0x0FFFu;
 
 PC = registers[0] + offset;
 }
+
+void OP_Cxkk() //Set Vx = random byte AND kk.
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t byte = opcode & 0x00FFu;
+
+	uint8_t rbyte=uint_dist(rng); //!!!! Check this later for any issues
+	registers[Vx] = rbyte & byte;
+}
+
+void OP_Dxyn() //Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+
+	uint8_t Sprite_height = (opcode & 0x000Fu);
+
+	//Handle wrap for out of boundary
+	uint8_t xPos = registers[Vx]%VIDEO_WIDTH;
+	uint8_t yPos = registers[Vy]%VIDEO_HEIGHT;
+
+	registers[0xF] = 0; //For pixel collision
+
+	for(int row=0;row<Sprite_height;row++)
+	{
+		uint8_t spriteByte = memory[IR + row];
+		for (unsigned int col = 0; col < 8; ++col)
+		{
+			uint8_t spritePixel = spriteByte & (0x80u >> col);
+			uint32_t* screenPixel = &frame_buffer[row][col];
+
+			// Sprite pixel is on
+			if (spritePixel)
+			{
+				// Screen pixel also on - collision
+				if (*screenPixel == 0xFFFFFFFF)
+				{
+					registers[0xF] = 1; //Collision detection for games
+				}
+
+				// Effectively XOR with the sprite pixel
+				*screenPixel ^= 0xFFFFFFFF;
+			}
+
+	}
+
+}
+
+
 
 
 };
