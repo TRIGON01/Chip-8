@@ -4,13 +4,11 @@
 #include<random>
 #include<memory.h>
 
-using byte=unsigned char;
-using word=unsigned short;
-using u32=unsigned int;
 
-static constexpr u32 MAXMEM=4096;
-static constexpr u32 mem_limit_upper=0xfff;
-static constexpr u32 mem_limit_lower=0x200;
+
+static constexpr uint32_t MAXMEM=4096;
+static constexpr uint32_t mem_limit_upper=0xfff;
+static constexpr uint32_t mem_limit_lower=0x200;
 static constexpr int FONTSET_SIZE = 80;
 static constexpr int FONTSET_START_ADDRESS = 0x50;
 
@@ -18,36 +16,21 @@ static constexpr int FONTSET_START_ADDRESS = 0x50;
 struct CPU
 {
 //16 8 bit registers V0-VF
-byte V0;
-byte V1;
-byte V2;
-byte V3;
-byte V4;
-byte V5;
-byte V6;
-byte V7;
-byte V8;
-byte V9;
-byte VA;
-byte VB;
-byte VC;
-byte VD;
-byte VE;
-byte VF;
+uint8_t registers[16];
 
 
-word IR;//16 bit index register
+uint16_t IR;//16 bit index register
 
-byte SP; //8 bit Stack pointer
-word PC;//16 bit program counter
+uint8_t SP; //8 bit Stack pointer
+uint16_t PC;//16 bit program counter
 
-byte delay_timer;//8 bit delay timer
-byte sound_timer; // 8 bit sound timer
+uint8_t delay_timer;//8 bit delay timer
+uint8_t sound_timer; // 8 bit sound timer
 
 bool frame_buffer[64][32];
-byte stack[64];
+uint8_t stack[64];
 
-byte memory[MAXMEM];
+uint8_t memory[MAXMEM];
 
 uint16_t opcode;
 
@@ -151,12 +134,12 @@ void OP_00EE()//Return from sub-routine
 void OP_1NNN() //Jump to location nnn
 {
     uint16_t val = opcode;
-    val=val&0x0fffu;
+    val=val&0x0FFFu;
     PC=val;
 
 }
 
-void OP_2nnn()
+void OP_2nnn() //Call subroutine at nnn
 {
 
 	uint16_t address =  opcode& 0x0FFFu;
@@ -164,6 +147,139 @@ void OP_2nnn()
     SP++;
 	PC= address;
 }
+
+void OP_3xkk() //Skip next instruction if Vx=kk
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t byte = opcode & 0x00FFu;
+
+	if (registers[Vx] == byte)
+	{
+		PC += 2;
+	}
+}
+
+void OP_4xkk() //Skip next instruction if Vx!=kk
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t byte = opcode & 0x00FFu;
+
+	if (registers[Vx] != byte)
+	{
+		PC += 2;
+	}
+}
+
+void OP_5xy0()  //Skip next instruction of Vx=Vy
+{
+    uint8_t Vx=(opcode&0x0F00u)>>8u;
+    uint8_t Vy=(opcode&0X00F0)>>4u;
+
+    if(registers[Vx]==registers[Vy])
+    {
+        PC+=2;
+    }
+}
+
+void OP_6xkk()  // Set Vx=kk
+{
+    uint8_t Vx=(opcode&0x0F00u)>>8u;
+    uint16_t kk=(opcode&0x00FFu);
+
+    if(registers[Vx]=kk)
+    {
+        PC+=2;
+    }
+}
+
+void OP_7xkk() //Add kk to Vx,  Vx=Vx+kk
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t byte = opcode & 0x00FFu;
+
+	registers[Vx] += byte;
+}
+
+void OP_8xy0() //Assign Vy to Vx, Vx = Vy
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+
+	registers[Vx] = registers[Vy];
+}
+
+void OP_8xy1() // Vx = Vx|Vy
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+
+	registers[Vx] |= registers[Vy];
+}
+
+void OP_8xy2() // Vx = Vx&Vy
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+
+	registers[Vx] &= registers[Vy];
+}
+
+void OP_8xy3() // Vx = Vx^Vy
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+
+	registers[Vx] ^= registers[Vy];
+}
+
+void OP_8xy4() // Vx=Vx+Vy
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+
+	uint16_t sum = registers[Vx] + registers[Vy];
+
+	if (sum > 255U) //VF is overfloe/carry register
+	{
+		registers[0xF] = 1;
+	}
+	else
+	{
+		registers[0xF] = 0;
+	}
+
+	registers[Vx] = sum & 0xFFu;
+}
+
+void OP_8xy5() //Vx=Vx-Vy
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+
+	if (registers[Vx] > registers[Vy])
+	{
+		registers[0xF] = 1;
+	}
+	else
+	{
+		registers[0xF] = 0;
+	}
+
+	registers[Vx] -= registers[Vy];
+}
+
+void OP_8xy6()
+{
+	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+
+	// Save LSB in VF
+	registers[0xF] = (registers[Vx] & 0x1u);
+
+	registers[Vx] >>= 1;
+}
+
+
+
 };
 
 int main()
