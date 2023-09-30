@@ -4,9 +4,9 @@ Main:
 
 g++ -c -I "C:\Users\sharm\Documents\Dependencies\(gcc)SFML-2.6.0\include" main.cpp     
 
+g++ main.o -o main -L"C:\Users\sharm\Documents\Dependencies\(gcc)SFML-2.6.0\lib" -lsfml-graphics -lsfml-window -lsfml-system 
 
-g++ main.o -o ".\SFML\main" -L"C:\Users\sharm\Documents\Dependencies\(gcc)SFML-2.6.0\lib" -lsfml-graphics -lsfml-window -lsfml-system 
-
+main.exe 10 3 test_opcode8.ch8
 
 Bug test:
 

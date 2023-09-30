@@ -25,8 +25,97 @@ public:
 
 CPU()
 {
-	execute();
+	
+	initialize();
+
+	// Set up function pointer table
+std::cout<<"starting function pointer table setup\n";
+		table[0x0] = &CPU::Table0;
+		table[0x1] = &CPU::OP_1nnn;
+		table[0x2] = &CPU::OP_2nnn;
+		table[0x3] = &CPU::OP_3xkk;
+		table[0x4] = &CPU::OP_4xkk;
+		table[0x5] = &CPU::OP_5xy0;
+		table[0x6] = &CPU::OP_6xkk;
+		table[0x7] = &CPU::OP_7xkk;
+		table[0x8] = &CPU::Table8;
+		table[0x9] = &CPU::OP_9xy0;
+		table[0xA] = &CPU::OP_Annn;
+		table[0xB] = &CPU::OP_Bnnn;
+		table[0xC] = &CPU::OP_Cxkk;
+		table[0xD] = &CPU::OP_Dxyn;
+		table[0xE] = &CPU::TableE;
+		table[0xF] = &CPU::TableF;
+
+		for (size_t i = 0; i <= 0xE; i++)
+		{
+			table0[i] = &CPU::OP_NULL;
+			table8[i] = &CPU::OP_NULL;
+			tableE[i] = &CPU::OP_NULL;
+		}
+
+		table0[0x0] = &CPU::OP_00E0;
+		table0[0xE] = &CPU::OP_00EE;
+
+		table8[0x0] = &CPU::OP_8xy0;
+		table8[0x1] = &CPU::OP_8xy1;
+		table8[0x2] = &CPU::OP_8xy2;
+		table8[0x3] = &CPU::OP_8xy3;
+		table8[0x4] = &CPU::OP_8xy4;
+		table8[0x5] = &CPU::OP_8xy5;
+		table8[0x6] = &CPU::OP_8xy6;
+		table8[0x7] = &CPU::OP_8xy7;
+		table8[0xE] = &CPU::OP_8xyE;
+
+		tableE[0x1] = &CPU::OP_ExA1;
+		tableE[0xE] = &CPU::OP_Ex9E;
+
+		for (size_t i = 0; i <= 0x65; i++)
+		{
+			tableF[i] = &CPU::OP_NULL;
+		}
+
+		tableF[0x07] = &CPU::OP_Fx07;
+		tableF[0x0A] = &CPU::OP_Fx0A;
+		tableF[0x15] = &CPU::OP_Fx15;
+		tableF[0x18] = &CPU::OP_Fx18;
+		tableF[0x1E] = &CPU::OP_Fx1E;
+		tableF[0x29] = &CPU::OP_Fx29;
+		tableF[0x33] = &CPU::OP_Fx33;
+		tableF[0x55] = &CPU::OP_Fx55;
+		tableF[0x65] = &CPU::OP_Fx65;
+		cout<<"FP setup done!!\n";
 }
+
+typedef void (CPU::*CPUFunc)();
+CPUFunc table[0xF + 1];
+CPUFunc table0[0xE + 1];
+CPUFunc table8[0xE + 1];
+CPUFunc tableE[0xE + 1];
+CPUFunc tableF[0x65 + 1];
+
+void Table0()
+{
+	((*this).*(table0[opcode & 0x000Fu]))();
+}
+
+void Table8()
+{
+	((*this).*(table8[opcode & 0x000Fu]))();
+}
+
+void TableE()
+{
+	((*this).*(tableE[opcode & 0x000Fu]))();
+}
+
+void TableF()
+{
+	((*this).*(tableF[opcode & 0x00FFu]))();
+}
+
+void OP_NULL()
+{}
 
 //16 8 bit registers V0-VF
 uint8_t registers[16];
@@ -40,12 +129,13 @@ uint16_t PC;//16 bit program counter
 uint8_t delay_timer;//8 bit delay timer
 uint8_t sound_timer; // 8 bit sound timer
 
-uint32_t frame_buffer[32][64];
-uint8_t stack[64];
+uint32_t video[64 * 32];
+uint16_t stack[16];
 
 uint8_t memory[MAXMEM];
 
 uint16_t opcode;
+
 uint8_t keypad[16];
 
 uint8_t fontset[FONTSET_SIZE] =
@@ -112,9 +202,11 @@ void LoadROM(char const* filename)
 		for (long i = 0; i < size; ++i)
 		{
 			memory[mem_limit_lower + i] = buffer[i];
+			printf("%0x ",memory[mem_limit_lower + i]);
 		}
 
 		// Free the buffer
+		//cout<<"Freed buffer successfully-Load rom phase\n";
 		delete[] buffer;
 	}
 }
@@ -122,7 +214,10 @@ void LoadROM(char const* filename)
 
 void OP_00E0() //Cls clear screen
 {
-	memset(frame_buffer, 0, sizeof(frame_buffer));
+	for(int i=0;i<32*64;i++)
+	{
+	 video[i]=0;
+	}
 }
 
 void OP_00EE()//Return from sub-routine
@@ -343,22 +438,22 @@ void OP_Dxyn() //Display n-byte sprite starting at memory location I at (Vx, Vy)
 {
 	uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 	uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+	uint8_t height = opcode & 0x000Fu;
 
-	uint8_t Sprite_height = (opcode & 0x000Fu);
+	// Wrap if going beyond screen boundaries
+	uint8_t xPos = registers[Vx] % VIDEO_WIDTH;
+	uint8_t yPos = registers[Vy] % VIDEO_HEIGHT;
 
-	//Handle wrap for out of boundary
-	uint8_t xPos = registers[Vx]%VIDEO_WIDTH;
-	uint8_t yPos = registers[Vy]%VIDEO_HEIGHT;
+	registers[0xF] = 0;
 
-	registers[0xF] = 0; //For pixel collision
-
-	for(int row=0;row<Sprite_height;row++)
+	for (unsigned int row = 0; row < height; ++row)
 	{
 		uint8_t spriteByte = memory[IR + row];
+
 		for (unsigned int col = 0; col < 8; ++col)
 		{
 			uint8_t spritePixel = spriteByte & (0x80u >> col);
-			uint32_t* screenPixel = &frame_buffer[row][col];
+			uint32_t* screenPixel = &video[(yPos + row) * VIDEO_WIDTH + (xPos + col)];
 
 			// Sprite pixel is on
 			if (spritePixel)
@@ -366,7 +461,7 @@ void OP_Dxyn() //Display n-byte sprite starting at memory location I at (Vx, Vy)
 				// Screen pixel also on - collision
 				if (*screenPixel == 0xFFFFFFFF)
 				{
-					registers[0xF] = 1; //Collision detection for games
+					registers[0xF] = 1;
 				}
 
 				// Effectively XOR with the sprite pixel
@@ -549,16 +644,19 @@ void OP_Fx65() // Load data from memory in to registers V0 to Vx
 ////////////////////////////////////////////
 //Cycle
 ///////////////////////////////////////////
-void cycle()
+void cycle() //Working
 {
     //Fetch
-    opcode=memory[PC];
-    opcode<<8u;
-    opcode=opcode|memory[PC+1]; // We attack two 8 bit segments to create one 16 bit segment
-    
-    //Decode and execute
-	((*this).*(table[(opcode & 0xF000u) >> 12u]))();
+	printf("Decode-execute-cycle - opcode - %d %0x \n",PC,opcode);
+    // Fetch
+	opcode = (memory[PC] << 8u) | memory[PC + 1];
 
+    // Increment the PC before we execute anything
+	PC += 2;
+    //Decode and execute
+	
+	((*this).*(table[(opcode & 0xF000u) >> 12u]))();
+	
 
     // Decrement the delay timer if it's been set
 	if (delay_timer > 0)
@@ -574,105 +672,6 @@ void cycle()
 
 }
 
-////////////////////////////////////////////
-////////////////////////////////////////////
-//Opcode decoding step
-////////////////////////////////////////////
- // Replace with the actual opcode you want to execute
-typedef void (CPU::*CPUFunc)();
-CPUFunc table[0xF + 1];
-CPUFunc table0[0xE + 1];
-CPUFunc table8[0xE + 1];
-CPUFunc tableE[0xE + 1];
-CPUFunc tableF[0x65 + 1];
-
-void Table0()
-{
-	((*this).*(table0[opcode & 0x000Fu]))();
-}
-
-void Table8()
-{
-	((*this).*(table8[opcode & 0x000Fu]))();
-}
-
-void TableE()
-{
-	((*this).*(tableE[opcode & 0x000Fu]))();
-}
-
-void TableF()
-{
-	((*this).*(tableF[opcode & 0x00FFu]))();
-}
-
-void OP_NULL()
-{}
-void execute()
-{
-// Set up function pointer table
-std::cout<<"starting function pointer table setup\n";
-		table[0x0] = &CPU::Table0;
-		table[0x1] = &CPU::OP_1nnn;
-		table[0x2] = &CPU::OP_2nnn;
-		table[0x3] = &CPU::OP_3xkk;
-		table[0x4] = &CPU::OP_4xkk;
-		table[0x5] = &CPU::OP_5xy0;
-		table[0x6] = &CPU::OP_6xkk;
-		table[0x7] = &CPU::OP_7xkk;
-		table[0x8] = &CPU::Table8;
-		table[0x9] = &CPU::OP_9xy0;
-		table[0xA] = &CPU::OP_Annn;
-		table[0xB] = &CPU::OP_Bnnn;
-		table[0xC] = &CPU::OP_Cxkk;
-		table[0xD] = &CPU::OP_Dxyn;
-		table[0xE] = &CPU::TableE;
-		table[0xF] = &CPU::TableF;
-
-		for (size_t i = 0; i <= 0xE; i++)
-		{
-			table0[i] = &CPU::OP_NULL;
-			table8[i] = &CPU::OP_NULL;
-			tableE[i] = &CPU::OP_NULL;
-		}
-
-		table0[0x0] = &CPU::OP_00E0;
-		table0[0xE] = &CPU::OP_00EE;
-
-		table8[0x0] = &CPU::OP_8xy0;
-		table8[0x1] = &CPU::OP_8xy1;
-		table8[0x2] = &CPU::OP_8xy2;
-		table8[0x3] = &CPU::OP_8xy3;
-		table8[0x4] = &CPU::OP_8xy4;
-		table8[0x5] = &CPU::OP_8xy5;
-		table8[0x6] = &CPU::OP_8xy6;
-		table8[0x7] = &CPU::OP_8xy7;
-		table8[0xE] = &CPU::OP_8xyE;
-
-		tableE[0x1] = &CPU::OP_ExA1;
-		tableE[0xE] = &CPU::OP_Ex9E;
-
-		for (size_t i = 0; i <= 0x65; i++)
-		{
-			tableF[i] = &CPU::OP_NULL;
-		}
-
-		tableF[0x07] = &CPU::OP_Fx07;
-		tableF[0x0A] = &CPU::OP_Fx0A;
-		tableF[0x15] = &CPU::OP_Fx15;
-		tableF[0x18] = &CPU::OP_Fx18;
-		tableF[0x1E] = &CPU::OP_Fx1E;
-		tableF[0x29] = &CPU::OP_Fx29;
-		tableF[0x33] = &CPU::OP_Fx33;
-		tableF[0x55] = &CPU::OP_Fx55;
-		tableF[0x65] = &CPU::OP_Fx65;
-		cout<<"FP setup done!!\n";
-}
-
-//////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////
-
-
 	
 
 };
@@ -683,6 +682,7 @@ public:
     Platform(const char* title, int windowWidth, int windowHeight, int textureWidth, int textureHeight)
     {
         window.create(sf::VideoMode(windowWidth, windowHeight), title);
+		window.clear(sf::Color::Green);
         texture.create(textureWidth, textureHeight);
         sprite.setTexture(texture);
     }
@@ -861,10 +861,12 @@ int main(int argc, char* argv[])
     CPU chip8;
     chip8.LoadROM(romFilename);
 
-    int videoPitch = sizeof(chip8.frame_buffer[0]) * VIDEO_WIDTH;
+    int videoPitch = sizeof(chip8.video[0]) * VIDEO_WIDTH;
 
     auto lastCycleTime = std::chrono::high_resolution_clock::now();
     bool quit = false;
+
+	printf("\n%0x\n",chip8.memory[mem_limit_lower+1]);//Remove later
 
     while (!quit)
     {
@@ -878,8 +880,8 @@ int main(int argc, char* argv[])
             lastCycleTime = currentTime;
 
             chip8.cycle();
-
-            platform.Update(chip8.frame_buffer, videoPitch);
+			// cout<<"Cycle running\n";
+            platform.Update(chip8.video, videoPitch);
         }
     }
 
