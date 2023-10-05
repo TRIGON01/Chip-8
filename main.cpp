@@ -1,6 +1,7 @@
 #include<iostream>
 #include<fstream>
 #include<chrono>
+#include<vector>
 #include<random>
 #include<memory.h>
 #include<iostream>
@@ -19,17 +20,76 @@ static constexpr int FONTSET_START_ADDRESS = 0x50;
 static constexpr int VIDEO_WIDTH = 64;
 static constexpr int VIDEO_HEIGHT = 32;
 
+//
+vector<int> vcpy;
+//
 class CPU
 {
 public:
 
+//16 8 bit registers V0-VF
+uint8_t registers[16];
+
+
+uint16_t IR;//16 bit index register
+
+uint8_t SP; //8 bit Stack pointer
+uint16_t PC;//16 bit program counter
+
+uint8_t delay_timer;//8 bit delay timer
+uint8_t sound_timer; // 8 bit sound timer
+
+uint8_t video[64 * 32]{};
+uint16_t stack[16]{};
+
+uint8_t memory[MAXMEM];
+
+uint16_t opcode;
+
+uint8_t keypad[16];
+
+uint8_t fontset[FONTSET_SIZE] =
+{
+	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+	0x20, 0x60, 0x20, 0x20, 0x70, // 1
+	0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+	0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+	0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+	0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+	0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+	0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+	0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+	0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+	0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+	0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+	0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+	0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+	0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+	0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+};
+
+
+
+//Constructor
 CPU()
 {
-	
+	//
+	PC=0x200;
+
+    // Load fonts into memory
+	cout<<"\n";
+	for (unsigned int i = 0; i < FONTSET_SIZE; ++i)
+	{
+		memory[FONTSET_START_ADDRESS + i] = fontset[i];
+		printf(" %0x ",memory[FONTSET_START_ADDRESS + i] );
+	}
+
+	//
+
 	initialize();
 
 	// Set up function pointer table
-std::cout<<"starting function pointer table setup\n";
+std::cout<<"\nstarting function pointer table setup\n";
 		table[0x0] = &CPU::Table0;
 		table[0x1] = &CPU::OP_1nnn;
 		table[0x2] = &CPU::OP_2nnn;
@@ -84,91 +144,7 @@ std::cout<<"starting function pointer table setup\n";
 		tableF[0x33] = &CPU::OP_Fx33;
 		tableF[0x55] = &CPU::OP_Fx55;
 		tableF[0x65] = &CPU::OP_Fx65;
-		cout<<"FP setup done!!\n";
-}
-
-typedef void (CPU::*CPUFunc)();
-CPUFunc table[0xF + 1];
-CPUFunc table0[0xE + 1];
-CPUFunc table8[0xE + 1];
-CPUFunc tableE[0xE + 1];
-CPUFunc tableF[0x65 + 1];
-
-void Table0()
-{
-	((*this).*(table0[opcode & 0x000Fu]))();
-}
-
-void Table8()
-{
-	((*this).*(table8[opcode & 0x000Fu]))();
-}
-
-void TableE()
-{
-	((*this).*(tableE[opcode & 0x000Fu]))();
-}
-
-void TableF()
-{
-	((*this).*(tableF[opcode & 0x00FFu]))();
-}
-
-void OP_NULL()
-{}
-
-//16 8 bit registers V0-VF
-uint8_t registers[16];
-
-
-uint16_t IR;//16 bit index register
-
-uint8_t SP; //8 bit Stack pointer
-uint16_t PC;//16 bit program counter
-
-uint8_t delay_timer;//8 bit delay timer
-uint8_t sound_timer; // 8 bit sound timer
-
-uint32_t video[64 * 32];
-uint16_t stack[16];
-
-uint8_t memory[MAXMEM];
-
-uint16_t opcode;
-
-uint8_t keypad[16];
-
-uint8_t fontset[FONTSET_SIZE] =
-{
-	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-	0x20, 0x60, 0x20, 0x20, 0x70, // 1
-	0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-	0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-	0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-	0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-	0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-	0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-	0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-	0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-	0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-	0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-	0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-	0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-	0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-	0xF0, 0x80, 0xF0, 0x80, 0x80  // F
-};
-//Reset function
-void reset()
-{
-    PC=mem_limit_lower;
-
-    // Load fonts into memory
-	for (unsigned int i = 0; i < FONTSET_SIZE; ++i)
-	{
-		memory[FONTSET_START_ADDRESS + i] = fontset[i];
-	}
-
-   
+		cout<<"\nFP setup done!!\n";
 }
 
 //Random byte implementation
@@ -197,7 +173,7 @@ void LoadROM(char const* filename)
 		file.seekg(0, std::ios::beg);
 		file.read(buffer, size);
 		file.close();
-
+		cout<<"File IO Working\n";
 		// Load the ROM contents into the& memory, starting at 0x200
 		for (long i = 0; i < size; ++i)
 		{
@@ -210,7 +186,6 @@ void LoadROM(char const* filename)
 		delete[] buffer;
 	}
 }
-
 
 void OP_00E0() //Cls clear screen
 {
@@ -228,10 +203,8 @@ void OP_00EE()//Return from sub-routine
 
 void OP_1nnn() //Jump to location nnn
 {
-    uint16_t val = opcode;
-    val=val&0x0FFFu;
-    PC=val;
-
+	uint16_t address = opcode & 0x0FFFu;
+	PC = address;
 }
 
 void OP_2nnn() //Call subroutine at nnn
@@ -278,13 +251,10 @@ void OP_5xy0()  //Skip next instruction of Vx=Vy
 
 void OP_6xkk()  // Set Vx=kk
 {
-    uint8_t Vx=(opcode&0x0F00u)>>8u;
-    uint16_t kk=(opcode&0x00FFu);
+    uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+	uint8_t byte = opcode & 0x00FFu;
 
-    if(registers[Vx]=kk)
-    {
-        PC+=2;
-    }
+	registers[Vx] = byte;
 }
 
 void OP_7xkk() //Add kk to Vx,  Vx=Vx+kk
@@ -453,7 +423,7 @@ void OP_Dxyn() //Display n-byte sprite starting at memory location I at (Vx, Vy)
 		for (unsigned int col = 0; col < 8; ++col)
 		{
 			uint8_t spritePixel = spriteByte & (0x80u >> col);
-			uint32_t* screenPixel = &video[(yPos + row) * VIDEO_WIDTH + (xPos + col)];
+			uint8_t* screenPixel = &video[(yPos + row) * VIDEO_WIDTH + (xPos + col)];
 
 			// Sprite pixel is on
 			if (spritePixel)
@@ -645,18 +615,19 @@ void OP_Fx65() // Load data from memory in to registers V0 to Vx
 //Cycle
 ///////////////////////////////////////////
 void cycle() //Working
-{
-    //Fetch
-	printf("Decode-execute-cycle - opcode - %d %0x \n",PC,opcode);
+{ 
     // Fetch
 	opcode = (memory[PC] << 8u) | memory[PC + 1];
-
+	printf("Decode-execute-cycle - opcode - %0x %0x \n",PC,opcode);
     // Increment the PC before we execute anything
 	PC += 2;
     //Decode and execute
 	
 	((*this).*(table[(opcode & 0xF000u) >> 12u]))();
 	
+	//Debug- storing video array in a vector 
+	vcpy.assign(video,video+64*32);
+	//
 
     // Decrement the delay timer if it's been set
 	if (delay_timer > 0)
@@ -672,7 +643,37 @@ void cycle() //Working
 
 }
 
-	
+/////////////////////////////////////////////////////////////////////////////////////////////
+typedef void (CPU::*Chip8Func)();
+Chip8Func table[0xF + 1];
+Chip8Func table0[0xE + 1];
+Chip8Func table8[0xE + 1];
+Chip8Func tableE[0xE + 1];
+Chip8Func tableF[0x65 + 1];
+
+void Table0()
+{
+	((*this).*(table0[opcode & 0x000Fu]))();
+}
+
+void Table8()
+{
+	((*this).*(table8[opcode & 0x000Fu]))();
+}
+
+void TableE()
+{
+	((*this).*(tableE[opcode & 0x000Fu]))();
+}
+
+void TableF()
+{
+	((*this).*(tableF[opcode & 0x00FFu]))();
+}
+
+void OP_NULL()
+{}
+
 
 };
 
@@ -682,7 +683,7 @@ public:
     Platform(const char* title, int windowWidth, int windowHeight, int textureWidth, int textureHeight)
     {
         window.create(sf::VideoMode(windowWidth, windowHeight), title);
-		window.clear(sf::Color::Green);
+		window.clear(sf::Color::Red);
         texture.create(textureWidth, textureHeight);
         sprite.setTexture(texture);
     }
@@ -692,10 +693,10 @@ public:
         // No need to explicitly destroy SFML objects; they are managed automatically.
     }
 
-    void Update(const void* buffer, int pitch)
+    void Update(uint8_t* buffer)
     {
-        texture.update(static_cast<const sf::Uint8*>(buffer),VIDEO_WIDTH,VIDEO_HEIGHT, texture.getSize().x, texture.getSize().y);
-        window.clear();
+		window.clear();
+        texture.update(buffer,VIDEO_WIDTH,VIDEO_HEIGHT, texture.getSize().x, texture.getSize().y);  
         window.draw(sprite);
         window.display();
     }
@@ -856,7 +857,7 @@ int main(int argc, char* argv[])
     int cycleDelay = std::stoi(argv[2]);
     const char* romFilename = argv[3];
 
-    Platform platform("CHIP-8 Emulator", VIDEO_WIDTH * videoScale, VIDEO_HEIGHT * videoScale, VIDEO_WIDTH, VIDEO_HEIGHT);
+    Platform platform("CHIP-8 Emulator", VIDEO_WIDTH * videoScale, VIDEO_HEIGHT * videoScale, VIDEO_WIDTH*10, VIDEO_HEIGHT*10);
 
     CPU chip8;
     chip8.LoadROM(romFilename);
@@ -866,9 +867,9 @@ int main(int argc, char* argv[])
     auto lastCycleTime = std::chrono::high_resolution_clock::now();
     bool quit = false;
 
-	printf("\n%0x\n",chip8.memory[mem_limit_lower+1]);//Remove later
+	printf("\n%0x\n",chip8.memory[mem_limit_lower]);//Remove later
 
-    while (!quit)
+    while (!quit) //!quit
     {
         quit = platform.ProcessInput(chip8.keypad);
 
@@ -881,9 +882,13 @@ int main(int argc, char* argv[])
 
             chip8.cycle();
 			// cout<<"Cycle running\n";
-            platform.Update(chip8.video, videoPitch);
+            platform.Update(chip8.video);
         }
     }
-
+		// for(int i=0;i<64*32;i++)
+		// {
+		// 	cout<<vcpy[i]<<" ";	
+		// }
+		cout<<"\n------------------\n";
     return 0;
 }
